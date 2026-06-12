@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>AX 경영진 토론 모니터링</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#ffffff; --page:#f1f5f9; --line:#e2e8f0;
+    --ink:#0f172a; --sub:#64748b; --muted:#94a3b8;
+    --green:#16a34a; --green-bg:#dcfce7;
+    --yellow:#ca8a04; --yellow-bg:#fef9c3;
+    --red:#dc2626; --red-bg:#fee2e2;
+    --accent:#2563eb; --accent-bg:#eff6ff;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    background:var(--page);color:var(--ink);font-size:13px;}
+  /* top bar */
+  .topbar{height:56px;background:var(--bg);color:#fff;display:flex;align-items:center;
+    padding:0 22px;justify-content:space-between;position:sticky;top:0;z-index:20;}
+  .topbar .brand{display:flex;align-items:center;gap:12px;font-weight:700;font-size:15px;letter-spacing:.3px;}
+  .topbar .brand .mark{width:9px;height:9px;border-radius:50%;background:#38bdf8;box-shadow:0 0 0 4px rgba(56,189,248,.2);}
+  .topbar .right{display:flex;align-items:center;gap:18px;font-size:12px;color:#cbd5e1;}
+  .topbar .timer{display:flex;align-items:center;gap:8px;background:#1e293b;padding:6px 12px;border-radius:7px;}
+  .topbar .timer b{color:#fff;font-variant-numeric:tabular-nums;font-size:14px;}
+  .topbar .timer.warn b{color:#fca5a5;}
+  .btn{background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:7px;padding:6px 12px;
+    cursor:pointer;font-size:12px;}
+  .btn:hover{background:#334155;}
+  /* layout */
+  .wrap{max-width:1820px;margin:0 auto;padding:18px 22px 60px;}
+  .crumbs{font-size:12px;color:var(--sub);margin-bottom:12px;}
+  .crumbs a{color:var(--accent);cursor:pointer;text-decoration:none;}
+  .crumbs a:hover{text-decoration:underline;}
+  h1.page{font-size:18px;margin:0 0 2px;}
+  .page-sub{color:var(--sub);font-size:12px;margin-bottom:16px;}
+  /* summary cards */
+  .cards{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:18px;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;}
+  .card .lbl{font-size:11px;color:var(--sub);margin-bottom:6px;letter-spacing:.2px;}
+  .card .val{font-size:24px;font-weight:700;line-height:1;}
+  .card .val small{font-size:13px;color:var(--muted);font-weight:500;}
+  .card.g .val{color:var(--green);} .card.y .val{color:var(--yellow);} .card.r .val{color:var(--red);}
+  /* main grid */
+  .maingrid{display:grid;grid-template-columns:1fr 330px;gap:18px;align-items:start;}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;}
+  .panel .phead{padding:12px 16px;border-bottom:1px solid var(--line);font-weight:700;font-size:13px;
+    display:flex;justify-content:space-between;align-items:center;}
+  .filters{display:flex;gap:6px;}
+  .chip{border:1px solid var(--line);background:#fff;border-radius:20px;padding:4px 12px;cursor:pointer;
+    font-size:12px;color:var(--sub);display:inline-flex;align-items:center;gap:6px;}
+  .chip.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .chip .dot{width:8px;height:8px;border-radius:50%;}
+  /* table */
+  table{width:100%;border-collapse:collapse;}
+  th{text-align:left;font-size:11px;color:var(--sub);font-weight:600;padding:8px 14px;
+    background:#f8fafc;border-bottom:1px solid var(--line);}
+  td{padding:9px 14px;border-bottom:1px solid #f1f5f9;vertical-align:middle;}
+  tr.grow{cursor:pointer;}
+  tr.grow:hover{background:var(--accent-bg);}
+  .sechead{background:#f8fafc;cursor:pointer;}
+  .sechead td{font-weight:700;font-size:13px;color:var(--ink);padding:10px 14px;border-bottom:1px solid var(--line);}
+  .sechead:hover td{color:var(--accent);}
+  .sechead .meta{font-weight:500;color:var(--sub);font-size:12px;margin-left:10px;}
+  .sechead .go{float:right;color:var(--accent);font-size:12px;font-weight:600;}
+  .stat{display:inline-flex;align-items:center;gap:7px;font-weight:600;}
+  .stat .dot{width:10px;height:10px;border-radius:50%;}
+  .stat.green{color:var(--green);} .stat.yellow{color:var(--yellow);} .stat.red{color:var(--red);}
+  .dot.green{background:var(--green);} .dot.yellow{background:var(--yellow);} .dot.red{background:var(--red);}
+  .num{font-variant-numeric:tabular-nums;}
+  .sil-bar{display:inline-block;width:54px;height:6px;background:#eef2f7;border-radius:3px;
+    overflow:hidden;vertical-align:middle;margin-right:7px;}
+  .sil-bar i{display:block;height:100%;}
+  .kw{display:inline-block;background:#f1f5f9;color:#475569;border-radius:5px;padding:2px 8px;
+    font-size:11px;margin:1px 3px 1px 0;}
+  .kw.hot{background:var(--accent-bg);color:var(--accent);font-weight:600;}
+  /* top10 */
+  .top10 .row10{display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid #f1f5f9;}
+  .top10 .rk{width:20px;color:var(--muted);font-weight:700;font-size:12px;text-align:center;}
+  .top10 .kwname{width:96px;font-weight:600;font-size:12px;}
+  .top10 .barwrap{flex:1;height:8px;background:#eef2f7;border-radius:4px;overflow:hidden;}
+  .top10 .barwrap i{display:block;height:100%;background:var(--accent);}
+  .top10 .cnt{width:30px;text-align:right;color:var(--sub);font-size:12px;}
+  /* screen3 matrix */
+  .matrix{overflow:auto;}
+  .matrix table{min-width:760px;}
+  .matrix th.tcol{width:170px;}
+  .matrix td.task{font-weight:600;background:#fafbfc;position:sticky;left:0;}
+  .matrix td.cell{vertical-align:top;}
+  .insight{background:linear-gradient(180deg,#eff6ff,#fff);border:1px solid #bfdbfe;border-radius:10px;
+    padding:16px 18px;margin-top:18px;}
+  .insight h3{margin:0 0 10px;font-size:13px;color:var(--accent);display:flex;align-items:center;gap:8px;}
+  .insight ul{margin:0;padding-left:18px;}
+  .insight li{margin:6px 0;line-height:1.55;}
+  /* screen1 */
+  .g1head{display:flex;justify-content:space-between;align-items:flex-start;background:var(--panel);
+    border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin-bottom:16px;}
+  .g1head .t{font-size:20px;font-weight:700;margin:2px 0;}
+  .g1head .sb{color:var(--sub);font-size:13px;}
+  .g1grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;}
+  .flow{display:flex;gap:0;overflow-x:auto;padding:6px 2px;}
+  .flow .step{min-width:160px;flex:1;position:relative;padding:0 14px;}
+  .flow .step:not(:last-child)::after{content:"→";position:absolute;right:-7px;top:26px;color:var(--muted);font-size:16px;}
+  .flow .step .tl{font-size:11px;color:var(--muted);}
+  .flow .step .tp{font-weight:700;font-size:14px;margin:4px 0 8px;}
+  .summbox{max-height:330px;overflow:auto;}
+  .summ-item{padding:10px 16px;border-bottom:1px solid #f1f5f9;}
+  .summ-item .h{font-size:11px;color:var(--accent);font-weight:700;margin-bottom:4px;}
+  .summ-item .b{color:#334155;line-height:1.55;}
+  .bigkw{padding:14px 16px;}
+  .bigkw .kw{font-size:13px;padding:6px 12px;margin:3px 5px 3px 0;}
+  .chartbox{padding:14px 16px;height:300px;}
+  .span2{grid-column:span 2;}
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><span class="mark"></span> AX 그룹 경영진 토론 모니터링</div>
+    <div class="right">
+      <span id="elapsed">경과 0분</span>
+      <span id="lastupd"></span>
+      <div class="timer" id="timerbox"><span>다음 갱신</span><b id="timer">20:00</b></div>
+      <button class="btn" id="refreshBtn">지금 갱신</button>
+    </div>
+  </div>
+  <div class="wrap" id="app"></div>
+
+<script>
+/* ============================== 과제 정의 (35개 조) ============================== */
+const COMPANY_ORDER = ["신한은행","신한카드","신한투자증권","신한라이프","신한펀드파트너스",
+  "신한자산운용","신한자산신탁","신한DS","제주은행","신한캐피탈","신한벤처투자","신한저축은행"];
+
+const TASKDEFS = [
+  // 신한은행 (4)
+  {company:"신한은행", task:"그룹 퇴직연금 순증 시장 지위 - 미래에셋 Catch-Up", kw:["퇴직연금","순증","디폴트옵션","수익률","미래에셋","적립금"]},
+  {company:"신한은행", task:"글로벌 Top-Line 강화", kw:["글로벌","해외법인","베트남","수익다변화","현지화","Top-Line"]},
+  {company:"신한은행", task:"New슈퍼SOL 차별 솔루션", kw:["슈퍼앱","MAU","개인화","UX","생활금융","락인"]},
+  {company:"신한은행", task:"일상적 자산관리 강화", kw:["자산관리","로보어드바이저","WM","생활금융","포트폴리오","리밸런싱"]},
+  // 신한카드 (2)
+  {company:"신한카드", task:"법인T&E 시장지위 1위 유지", kw:["법인카드","T&E","비용관리","점유율","제휴","경비처리"]},
+  {company:"신한카드", task:"연체채권 건전성 제고", kw:["연체율","추심전략","충당금","건전성","조기경보","상각"]},
+  // 신한투자증권 (3)
+  {company:"신한투자증권", task:"고객 경험 확대", kw:["고객경험","MTS","리테일","디지털채널","온보딩","CX"]},
+  {company:"신한투자증권", task:"자산증대", kw:["예탁자산","신규고객","자산배분","유치","ISA","수익률"]},
+  {company:"신한투자증권", task:"E/DCM 경쟁사 추격", kw:["ECM","DCM","인수주선","IB","딜","트랙레코드"]},
+  // 신한라이프 (4)
+  {company:"신한라이프", task:"신계약 CSM 마진율", kw:["CSM","신계약","마진율","보장성","상품믹스","수익성"]},
+  {company:"신한라이프", task:"운용자산이익률", kw:["운용자산","이익률","자산운용","금리","대체투자","듀레이션"]},
+  {company:"신한라이프", task:"보험금지연지급률", kw:["보험금","지연지급","심사","프로세스","자동심사","민원"]},
+  {company:"신한라이프", task:"건강증진형 보험 확대", kw:["헬스케어","건강증진","웨어러블","언더라이팅","데이터","가입률"]},
+  // 신한펀드파트너스 (2)
+  {company:"신한펀드파트너스", task:"펀드 운영 효율화", kw:["펀드사무","자동화","운영리스크","정산","효율화","RPA"]},
+  {company:"신한펀드파트너스", task:"수탁고 확대", kw:["수탁고","신규운용사","서비스","경쟁력","제휴","온보딩"]},
+  // 신한자산운용 (3)
+  {company:"신한자산운용", task:"ETF 시장 점유율 확대", kw:["ETF","점유율","라인업","패시브","보수율","유동성"]},
+  {company:"신한자산운용", task:"연금 운용 경쟁력 강화", kw:["연금","TDF","수익률","장기성과","디폴트옵션","자산배분"]},
+  {company:"신한자산운용", task:"대체투자 역량 강화", kw:["대체투자","부동산","인프라","사모","밸류업","리스크"]},
+  // 신한자산신탁 (3)
+  {company:"신한자산신탁", task:"책임준공형 리스크 관리", kw:["책임준공","리스크","PF","사업성","공정관리","손실"]},
+  {company:"신한자산신탁", task:"신규 신탁상품 개발", kw:["신탁상품","가업승계","유언대용","수요","상품설계","세제"]},
+  {company:"신한자산신탁", task:"부동산신탁 수익 다변화", kw:["부동산신탁","수익다변화","정비사업","보수","신규영역","경쟁"]},
+  // 신한DS (3)
+  {company:"신한DS", task:"그룹 AI 플랫폼 구축", kw:["AI플랫폼","MLOps","거버넌스","표준화","데이터","재사용"]},
+  {company:"신한DS", task:"클라우드 전환 가속", kw:["클라우드","전환","비용","보안","마이그레이션","속도"]},
+  {company:"신한DS", task:"차세대 시스템 안정화", kw:["차세대","안정화","장애","운영","모니터링","품질"]},
+  // 제주은행 (3)
+  {company:"제주은행", task:"지역 기반 디지털 전환", kw:["지역","디지털전환","영업점","비대면","효율화","고객"]},
+  {company:"제주은행", task:"중소기업 여신 확대", kw:["중소기업","여신","지역경제","심사","리스크","성장"]},
+  {company:"제주은행", task:"관광 특화 금융 강화", kw:["관광","특화상품","제주","제휴","결제","외국인"]},
+  // 신한캐피탈 (3)
+  {company:"신한캐피탈", task:"기업금융 포트폴리오 다변화", kw:["기업금융","포트폴리오","다변화","수익원","리스크","신성장"]},
+  {company:"신한캐피탈", task:"부동산금융 건전성 강화", kw:["부동산금융","건전성","PF","충당금","사업성","관리"]},
+  {company:"신한캐피탈", task:"리테일 금융 신규 진출", kw:["리테일","신규진출","자동차금융","채널","신용평가","수익성"]},
+  // 신한벤처투자 (2)
+  {company:"신한벤처투자", task:"우량 딜 소싱 강화", kw:["딜소싱","스타트업","발굴","네트워크","밸류에이션","선점"]},
+  {company:"신한벤처투자", task:"펀드 결성 규모 확대", kw:["펀드결성","LP","출자","트랙레코드","규모","모펀드"]},
+  // 신한저축은행 (3)
+  {company:"신한저축은행", task:"중금리 대출 확대", kw:["중금리","대출","신용평가","CSS","수익성","고객군"]},
+  {company:"신한저축은행", task:"디지털 채널 강화", kw:["디지털채널","앱","비대면","UX","신규유입","효율화"]},
+  {company:"신한저축은행", task:"건전성 관리 고도화", kw:["건전성","연체관리","CSS","조기경보","충당금","회수"]},
+];
+
+/* 토론 단계 정의 — headline 은 모든 조가 공유하는 공통 쟁점 키워드 */
+const STAGES = [
+  {topic:"현황진단", headline:"현황",   summ:"현황을 점검하고 핵심 문제를 진단"},
+  {topic:"문제정의", headline:"문제정의", summ:"근본 원인과 우선순위를 정의"},
+  {topic:"실행방안", headline:"실행주체", summ:"구체적 실행방안과 추진 주체를 논의"},
+  {topic:"조직·권한", headline:"예산",   summ:"실행을 위한 조직·권한과 예산을 점검"},
+  {topic:"예산·자원", headline:"투자규모", summ:"필요 자원과 투자 규모를 검토"},
+  {topic:"일정·로드맵", headline:"로드맵", summ:"추진 일정과 단계별 로드맵을 구체화"},
+  {topic:"리스크점검", headline:"리스크", summ:"주요 리스크와 대응 방안을 점검"},
+  {topic:"실행과제확정", headline:"실행과제", summ:"핵심 실행과제를 확정"},
+  {topic:"종합정리", headline:"종합",   summ:"논의를 종합하고 결론을 정리"},
+];
+
+/* ============================== 상태/유틸 ============================== */
+const STATUS = {
+  green:{label:"활발", cls:"green"},
+  yellow:{label:"주의", cls:"yellow"},
+  red:{label:"침체", cls:"red"},
+};
+const state = { refreshTick:0, elapsedBatches:4, countdown:20*60, filter:"all" };
+const SESSION_START = new Date("2025-06-02T13:30:00");
+
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296;};}
+const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+const pct=v=>Math.round(v*100);
+const r2=v=>Math.round(v*100)/100;
+const timeLabel=b=>`${(b-1)*20}~${b*20}분`;
+
+function statusOf(silence,speakers){
+  if(speakers<=3 || silence>0.33) return "red";
+  if(silence>0.22) return "yellow";
+  return "green";
+}
+
+/* ============================== 데이터 생성 ============================== */
+let _cache=null,_cacheKey="";
+function getGroups(){
+  const key=state.elapsedBatches+"|"+state.refreshTick;
+  if(key===_cacheKey) return _cache;
+  _cache=buildGroups(); _cacheKey=key; return _cache;
+}
+function buildGroups(){
+  return TASKDEFS.map((def,i)=>{
+    const id=i+1;
+    const rng=mulberry32(id*7919 + state.refreshTick*104729);
+    const engagement=rng();
+    const silenceBase=0.10+(1-engagement)*0.32;
+    const speakersBase=3+Math.round(engagement*5);
+    const len=def.kw.length;
+    const timeline=[], activity=[];
+    for(let b=1;b<=state.elapsedBatches;b++){
+      const st=STAGES[b-1];
+      const sil=clamp(silenceBase+(rng()-0.5)*0.08,0.04,0.55);
+      const sp=Math.max(2,Math.round(speakersBase+(rng()-0.5)*2));
+      const kws=[st.headline, def.kw[b%len], def.kw[(b+2)%len]];
+      timeline.push({batch:b,time_label:timeLabel(b),topic:st.topic,keywords:kws});
+      activity.push({batch:b,silence_ratio:r2(sil),speakers:sp});
+    }
+    const last=activity[activity.length-1];
+    const status=statusOf(last.silence_ratio,last.speakers);
+    const summary=timeline.map(t=>{
+      const st=STAGES[t.batch-1];
+      return `[${t.time_label}] ${t.topic} — ${st.summ}하고 '${t.keywords.join(", ")}' 중심으로 논의가 이루어졌다.`;
+    }).join("\n");
+    const upd=new Date(SESSION_START.getTime()+state.elapsedBatches*20*60000);
+    return {
+      id, company:def.company, task:def.task, status,
+      speakers_estimated:last.speakers, silence_ratio:last.silence_ratio,
+      keywords:timeline[timeline.length-1].keywords,
+      summary, timeline, activity_history:activity,
+      last_updated:upd.toISOString(),
+    };
+  });
+}
+
+/* ============================== 집계 ============================== */
+function aggKeywords(groups){
+  const m={};
+  groups.forEach(g=>g.timeline.forEach(t=>t.keywords.forEach(k=>{m[k]=(m[k]||0)+1;})));
+  return Object.entries(m).sort((a,b)=>b[1]-a[1]);
+}
+function statusCounts(groups){
+  const c={green:0,yellow:0,red:0};
+  groups.forEach(g=>c[g.status]++); return c;
+}
+function avgSilence(groups){
+  if(!groups.length) return 0;
+  return groups.reduce((s,g)=>s+g.silence_ratio,0)/groups.length;
+}
+
+/* ============================== 공통 렌더 조각 ============================== */
+function statTag(status){
+  const s=STATUS[status];
+  return `<span class="stat ${s.cls}"><span class="dot ${s.cls}"></span>${s.label}</span>`;
+}
+function silCell(v){
+  const c=v>0.33?"var(--red)":v>0.22?"var(--yellow)":"var(--green)";
+  return `<span class="sil-bar"><i style="width:${pct(v)}%;background:${c}"></i></span><span class="num">${pct(v)}%</span>`;
+}
+function kwChips(arr,hotSet){
+  return arr.map(k=>`<span class="kw${hotSet&&hotSet.has(k)?" hot":""}">${k}</span>`).join("");
+}
+function groupRow(g){
+  return `<tr class="grow" onclick="nav('group',${g.id})">
+    <td>${statTag(g.status)}</td>
+    <td class="num">${g.id}조</td>
+    <td>${g.task}</td>
+    <td class="num">${g.speakers_estimated}명</td>
+    <td>${silCell(g.silence_ratio)}</td>
+    <td>${kwChips(g.keywords)}</td>
+  </tr>`;
+}
+const TH=`<tr><th style="width:78px">신호등</th><th style="width:52px">조</th><th>과제명</th>
+  <th style="width:80px">발언자</th><th style="width:120px">침묵비율</th><th style="width:230px">핵심 키워드</th></tr>`;
+
+/* ============================== Screen 2 — 전체 관리자 ============================== */
+function renderDashboard(){
+  const groups=getGroups();
+  const c=statusCounts(groups);
+  const avg=avgSilence(groups);
+  const top=aggKeywords(groups).slice(0,10);
+  const maxCnt=top.length?top[0][1]:1;
+  const f=state.filter;
+
+  const sections=COMPANY_ORDER.map(co=>{
+    const gs=groups.filter(g=>g.company===co);
+    const shown=gs.filter(g=>f==="all"||g.status===f);
+    if(!shown.length) return "";
+    const sc=statusCounts(gs);
+    const rows=shown.map(groupRow).join("");
+    return `<tr class="sechead" onclick="nav('subsidiary','${co}')">
+        <td colspan="6">${co}
+          <span class="meta">${gs.length}개 조 · 활발 ${sc.green} / 주의 ${sc.yellow} / 침체 ${sc.red}
+            · 평균 침묵 ${pct(avgSilence(gs))}%</span>
+          <span class="go">자회사 화면 →</span></td></tr>${rows}`;
+  }).join("");
+
+  const fchip=(key,label,cls)=>`<span class="chip ${f===key?"active":""}" onclick="setFilter('${key}')">
+    ${cls?`<span class="dot ${cls}"></span>`:""}${label}</span>`;
+
+  const elapsedMin=state.elapsedBatches*20;
+  app.innerHTML=`
+    <h1 class="page">전체 관리자 화면</h1>
+    <div class="page-sub">35개 조 실시간 토론 모니터링 · 20분 단위 배치 STT 갱신</div>
+    <div class="cards">
+      <div class="card g"><div class="lbl">활발 (Green)</div><div class="val">${c.green}<small> 조</small></div></div>
+      <div class="card y"><div class="lbl">주의 (Yellow)</div><div class="val">${c.yellow}<small> 조</small></div></div>
+      <div class="card r"><div class="lbl">침체 (Red)</div><div class="val">${c.red}<small> 조</small></div></div>
+      <div class="card"><div class="lbl">전체 평균 침묵비율</div><div class="val">${pct(avg)}<small>%</small></div></div>
+      <div class="card"><div class="lbl">경과 시간</div><div class="val">${elapsedMin}<small>분 / 180분</small></div></div>
+      <div class="card"><div class="lbl">현재 배치</div><div class="val">${state.elapsedBatches}<small> / 9 차</small></div></div>
+    </div>
+    <div class="maingrid">
+      <div class="panel">
+        <div class="phead">조별 현황 리스트
+          <div class="filters">
+            ${fchip("all","전체")}
+            ${fchip("green","활발","green")}
+            ${fchip("yellow","주의","yellow")}
+            ${fchip("red","침체","red")}
+          </div>
+        </div>
+        <table><thead>${TH}</thead><tbody>${sections||`<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--sub)">해당 상태의 조가 없습니다.</td></tr>`}</tbody></table>
+      </div>
+      <div class="panel top10">
+        <div class="phead">전체 공통 키워드 Top 10</div>
+        ${top.map(([k,n],i)=>`<div class="row10">
+            <div class="rk">${i+1}</div>
+            <div class="kwname">${k}</div>
+            <div class="barwrap"><i style="width:${Math.round(n/maxCnt*100)}%"></i></div>
+            <div class="cnt num">${n}</div></div>`).join("")}
+      </div>
+    </div>`;
+}
+
+/* ============================== Screen 3 — 자회사별 ============================== */
+function renderSubsidiary(company){
+  const groups=getGroups().filter(g=>g.company===company);
+  if(!groups.length){ nav("dashboard"); return; }
+  const sc=statusCounts(groups);
+  const avg=avgSilence(groups);
+  const overall = sc.red>=Math.ceil(groups.length/3)?"red":sc.green>groups.length/2?"green":"yellow";
+
+  // 매트릭스: 행=과제, 열=배치. 같은 열에서 2개 이상 조가 공유한 키워드 강조
+  const nb=state.elapsedBatches;
+  const colHot=[]; // per-batch Set of hot keywords
+  for(let b=1;b<=nb;b++){
+    const cnt={};
+    groups.forEach(g=>{const t=g.timeline[b-1]; if(t) t.keywords.forEach(k=>cnt[k]=(cnt[k]||0)+1);});
+    colHot.push(new Set(Object.entries(cnt).filter(([,n])=>n>=2).map(([k])=>k)));
+  }
+  const headCols=Array.from({length:nb},(_,i)=>`<th>${timeLabel(i+1)}<div style="font-weight:500;color:var(--muted)">${STAGES[i].topic}</div></th>`).join("");
+  const matRows=groups.map(g=>{
+    const cells=g.timeline.map((t,i)=>`<td class="cell">${kwChips(t.keywords,colHot[i])}</td>`).join("");
+    return `<tr class="grow" onclick="nav('group',${g.id})"><td class="task">${g.task}</td>${cells}</tr>`;
+  }).join("");
+
+  // CEO 인사이트 — 40분(배치3) 이후 공통 수렴 키워드 기반
+  const insights=[];
+  for(let b=3;b<=nb;b++){
+    const hot=[...colHot[b-1]];
+    hot.forEach(k=>{
+      const m=groups.filter(g=>g.timeline[b-1]&&g.timeline[b-1].keywords.includes(k)).length;
+      if(m>=2 && m>=Math.ceil(groups.length/2)){
+        insights.push(`${company} ${groups.length}개 조 중 ${m}개 조에서 '${k}' 쟁점이 ${(b-1)*20}분 이후 공통 쟁점으로 수렴되었습니다.`);
+      }
+    });
+  }
+  const redGroups=groups.filter(g=>g.status==="red");
+  if(redGroups.length) insights.push(`${redGroups.map(g=>g.id+"조("+g.task+")").join(", ")}의 토론 활성도가 낮아 퍼실리테이터 개입이 필요합니다.`);
+  const uniq=[...new Set(insights)].slice(0,4);
+
+  app.innerHTML=`
+    <div class="crumbs"><a onclick="nav('dashboard')">전체 관리자</a> › <b>${company}</b></div>
+    <h1 class="page">${company}</h1>
+    <div class="page-sub">자회사 단위 토론 현황 · CEO·그룹 진행자용</div>
+    <div class="cards">
+      <div class="card"><div class="lbl">소속 조 수</div><div class="val">${groups.length}<small> 조</small></div></div>
+      <div class="card g"><div class="lbl">활발</div><div class="val">${sc.green}<small> 조</small></div></div>
+      <div class="card y"><div class="lbl">주의</div><div class="val">${sc.yellow}<small> 조</small></div></div>
+      <div class="card r"><div class="lbl">침체</div><div class="val">${sc.red}<small> 조</small></div></div>
+      <div class="card"><div class="lbl">자회사 평균 침묵비율</div><div class="val">${pct(avg)}<small>%</small></div></div>
+      <div class="card"><div class="lbl">전체 상태 요약</div><div class="val" style="font-size:18px">${statTag(overall)}</div></div>
+    </div>
+    <div class="panel" style="margin-bottom:18px">
+      <div class="phead">소속 조 현황</div>
+      <table><thead>${TH}</thead><tbody>${groups.map(groupRow).join("")}</tbody></table>
+    </div>
+    <div class="panel">
+      <div class="phead">쟁점 이동 매트릭스 <span style="font-weight:500;color:var(--sub)">과제 × 배치 시간대 · <span class="kw hot" style="margin:0">강조</span> = 다수 조 공통 키워드</span></div>
+      <div class="matrix">
+        <table><thead><tr><th class="tcol">과제</th>${headCols}</tr></thead>
+        <tbody>${matRows}</tbody></table>
+      </div>
+    </div>
+    <div class="insight">
+      <h3>◆ CEO 인사이트 (20분 배치 누적 기준)</h3>
+      ${uniq.length?`<ul>${uniq.map(s=>`<li>${s}</li>`).join("")}</ul>`:`<div style="color:var(--sub)">아직 공통 쟁점 수렴이 관측되지 않았습니다. (40분 이후 누적 분석)</div>`}
+    </div>`;
+}
+
+/* ============================== Screen 1 — 조별 상세 ============================== */
+let chartInst=null;
+function renderGroup(id){
+  const g=getGroups().find(x=>x.id===id);
+  if(!g){ nav("dashboard"); return; }
+  const upd=new Date(g.last_updated);
+  const updStr=`${String(upd.getHours()).padStart(2,"0")}:${String(upd.getMinutes()).padStart(2,"0")}`;
+  const flow=g.timeline.map(t=>`<div class="step">
+      <div class="tl">${t.time_label}</div>
+      <div class="tp">${t.topic}</div>
+      <div>${kwChips(t.keywords)}</div></div>`).join("");
+  const summ=g.summary.split("\n").map(line=>{
+    const m=line.match(/^\[(.+?)\]\s*(.+?)\s*—\s*(.+)$/);
+    return `<div class="summ-item"><div class="h">${m?m[1]+" · "+m[2]:""}</div><div class="b">${m?m[3]:line}</div></div>`;
+  }).join("");
+
+  app.innerHTML=`
+    <div class="crumbs"><a onclick="nav('dashboard')">전체 관리자</a> ›
+      <a onclick="nav('subsidiary','${g.company}')">${g.company}</a> › <b>${g.id}조</b></div>
+    <div class="g1head">
+      <div>
+        <div class="sb">${g.company} · ${g.id}조</div>
+        <div class="t">${g.task}</div>
+        <div class="sb">마지막 갱신 ${updStr} · ${state.elapsedBatches}차 배치</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:20px;margin-bottom:8px">${statTag(g.status)}</div>
+        <div class="sb">발언자 추정 <b>${g.speakers_estimated}명</b> · 침묵 <b>${pct(g.silence_ratio)}%</b></div>
+      </div>
+    </div>
+    <div class="panel" style="margin-bottom:16px">
+      <div class="phead">쟁점 이동 시계열 (20분 단위 토픽 흐름)</div>
+      <div class="flow">${flow}</div>
+    </div>
+    <div class="g1grid">
+      <div class="panel">
+        <div class="phead">토론 활성화 추이 (침묵비율 · 발언자 수)</div>
+        <div class="chartbox"><canvas id="actchart"></canvas></div>
+      </div>
+      <div class="panel">
+        <div class="phead">현재까지 토론 요약 (배치별 누적)</div>
+        <div class="summbox">${summ}</div>
+      </div>
+      <div class="panel span2">
+        <div class="phead">현재 핵심 키워드 (최근 배치 ${timeLabel(state.elapsedBatches)})</div>
+        <div class="bigkw">${kwChips(g.keywords)}</div>
+      </div>
+    </div>`;
+
+  // chart
+  const ctx=document.getElementById("actchart");
+  if(chartInst) chartInst.destroy();
+  chartInst=new Chart(ctx,{
+    data:{
+      labels:g.activity_history.map(a=>timeLabel(a.batch)),
+      datasets:[
+        {type:"bar",label:"발언자 수(명)",yAxisID:"y1",data:g.activity_history.map(a=>a.speakers),
+         backgroundColor:"#bfdbfe",borderColor:"#60a5fa",borderWidth:1,order:2},
+        {type:"line",label:"침묵비율(%)",yAxisID:"y",data:g.activity_history.map(a=>pct(a.silence_ratio)),
+         borderColor:"#dc2626",backgroundColor:"#dc2626",tension:.3,pointRadius:4,order:1},
+      ]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+      plugins:{legend:{position:"bottom",labels:{boxWidth:12,font:{size:11}}}},
+      scales:{
+        y:{position:"left",title:{display:true,text:"침묵비율(%)"},min:0,max:60,grid:{color:"#f1f5f9"}},
+        y1:{position:"right",title:{display:true,text:"발언자(명)"},min:0,max:12,grid:{drawOnChartArea:false}},
+      }}});
+}
+
+/* ============================== 라우터 ============================== */
+function nav(type,val){
+  if(type==="group") location.hash="#/group/"+val;
+  else if(type==="subsidiary") location.hash="#/subsidiary/"+encodeURIComponent(val);
+  else location.hash="#/dashboard";
+}
+function setFilter(f){ state.filter=f; renderDashboard(); }
+function router(){
+  const h=location.hash.replace(/^#\/?/,"");
+  const parts=h.split("/");
+  if(chartInst && parts[0]!=="group"){ chartInst.destroy(); chartInst=null; }
+  if(parts[0]==="group") renderGroup(parseInt(parts[1],10));
+  else if(parts[0]==="subsidiary") renderSubsidiary(decodeURIComponent(parts[1]||""));
+  else renderDashboard();
+  window.scrollTo(0,0);
+}
+
+/* ============================== 타이머 / 갱신 ============================== */
+function fmt(s){return `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;}
+function tick(){
+  state.countdown--;
+  if(state.countdown<=0){ advanceBatch(); state.countdown=20*60; }
+  updateTopbar();
+}
+function advanceBatch(){
+  if(state.elapsedBatches<9) state.elapsedBatches++;
+  state.refreshTick++;
+  router();
+}
+function updateTopbar(){
+  document.getElementById("timer").textContent=fmt(state.countdown);
+  document.getElementById("timerbox").classList.toggle("warn",state.countdown<=60);
+  document.getElementById("elapsed").textContent=`경과 ${state.elapsedBatches*20}분 / 180분`;
+  const upd=new Date(SESSION_START.getTime()+state.elapsedBatches*20*60000);
+  document.getElementById("lastupd").textContent=
+    `갱신 ${String(upd.getHours()).padStart(2,"0")}:${String(upd.getMinutes()).padStart(2,"0")}`;
+}
+
+/* ============================== 부팅 ============================== */
+const app=document.getElementById("app");
+document.getElementById("refreshBtn").onclick=()=>{ advanceBatch(); state.countdown=20*60; updateTopbar(); };
+window.addEventListener("hashchange",router);
+// ?group=N 쿼리 파라미터 지원
+(function(){
+  const q=new URLSearchParams(location.search);
+  if(q.has("group") && !location.hash){ location.hash="#/group/"+q.get("group"); }
+})();
+updateTopbar();
+router();
+setInterval(tick,1000);
+</script>
+</body>
+</html>
